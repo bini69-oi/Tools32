@@ -136,5 +136,7 @@ t32::env::set() {
 t32::env::get() {
     local path="$1" key="$2"
     [[ -f $path ]] || t32::die 66 "Нет файла окружения: $path"
-    sed -nE "s/^${key}=(.*)$/\\1/p" "$path" | head -1
+    # Без пайпа в head: тот закрывает поток на первой строке, sed получает
+    # SIGPIPE, и под pipefail функция вернула бы ошибку на ровном месте.
+    awk -v k="$key" 'index($0, k "=") == 1 { print substr($0, length(k) + 2); exit }' "$path"
 }

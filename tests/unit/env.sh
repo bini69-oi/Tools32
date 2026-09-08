@@ -15,7 +15,10 @@ t32::env::panel "$WORK" panel.example.com sub.example.com
 ENVF="$WORK/.env"
 
 t32::t::case "файл окружения доступен только владельцу"
-t32::t::eq "600" "$(stat -f '%Lp' "$ENVF" 2>/dev/null || stat -c '%a' "$ENVF")"
+# Порядок важен: у GNU stat -f это «статус файловой системы», неизвестный
+# формат он печатает как ? и выходит с нулём — фолбэк тогда не срабатывает.
+# BSD stat на -c честно ругается, поэтому GNU-вариант идёт первым.
+t32::t::eq "600" "$(stat -c '%a' "$ENVF" 2>/dev/null || stat -f '%Lp' "$ENVF")"
 
 t32::t::case "пароль Postgres не равен postgres"
 pg="$(t32::env::get "$ENVF" POSTGRES_PASSWORD)"

@@ -55,13 +55,24 @@ t32::secrets::username() {
         "$(t32::secrets::__draw "$((length - 1))" "$T32_SECRET_ALPHABET_ALNUM")"
 }
 
+# Вынесено отдельной функцией, чтобы тест мог заставить пойти по запасному пути:
+# на macOS openssl есть всегда, а в debian-slim бинаря нет, и незакрытая ветка
+# так и уехала бы в CI непроверенной.
+t32::secrets::__has_openssl() { command -v openssl >/dev/null 2>&1; }
+
 # t32::secrets::hex <байт> — ключ в hex, вдвое длиннее в символах.
 t32::secrets::hex() {
     local bytes="${1:-32}"
-    if command -v openssl >/dev/null 2>&1; then
+    if t32::secrets::__has_openssl; then
         openssl rand -hex "$bytes"
-    else
-        LC_ALL=C tr -dc 'a-f0-9' </dev/urandom | head -c "$((bytes * 2))"
-        printf '\n'
+        return 0
     fi
+    # head -c закрывает пайп, tr получает SIGPIPE, и с pipefail это валит
+    # скрипт. Отсюда || true — ошибка тут ожидаемая, а не настоящая.
+    local out
+    out="$(LC_ALL=C tr -dc 'a-f0-9' </dev/urandom | head -c "$((bytes * 2))" || true)"
+    if [[ ${#out} -ne $((bytes * 2)) ]]; then
+        t32::die 70 "Не удалось прочитать $bytes случайных байт из /dev/urandom."
+    fi
+    printf '%s\n' "$out"
 }

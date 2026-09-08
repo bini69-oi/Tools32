@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2329  # подменённый __has_openssl вызывается косвенно, из hex
 # shellcheck disable=SC2016  # $T32_ROOT нарочно раскрывается в дочернем bash, не здесь
 source "$T32_ROOT/lib/boot.sh"
 source "$T32_ROOT/tests/harness.sh"
@@ -51,5 +52,20 @@ if [[ $h =~ ^[0-9a-f]+$ ]]; then t32::t::__pass; else t32::t::__fail "не hex: 
 
 t32::t::case "слишком короткий пароль не генерируем"
 t32::t::fails bash -c 'source "$T32_ROOT/lib/boot.sh"; t32::require log; t32::require secrets; t32::secrets::password 4'
+
+# Запасной путь без openssl: в debian-slim бинаря нет, и раньше он падал по
+# SIGPIPE от head -c при включённом pipefail.
+t32::t::case "hex работает и без openssl"
+t32::secrets::__has_openssl() { return 1; }
+h2="$(t32::secrets::hex 32)"
+t32::t::eq "64" "${#h2}"
+
+t32::t::case "hex без openssl — тоже настоящий hex"
+if [[ $h2 =~ ^[0-9a-f]{64}$ ]]; then t32::t::__pass; else t32::t::__fail "не hex: $h2"; fi
+
+t32::t::case "запасной путь не повторяется дважды подряд"
+h3="$(t32::secrets::hex 32)"
+if [[ $h2 == "$h3" ]]; then t32::t::__fail "повтор"; else t32::t::__pass; fi
+unset -f t32::secrets::__has_openssl
 
 t32::t::summary
