@@ -10,14 +10,23 @@ jobs:
   shellcheck:
     name: shellcheck
     runs-on: ubuntu-latest
+    env:
+      SHELLCHECK_VERSION: '0.11.0'
     steps:
       - uses: actions/checkout@v4
-      - name: Установить shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Установить shellcheck ${{ env.SHELLCHECK_VERSION }}
+        run: |
+          # Версия пиньётся нарочно: в apt Ubuntu лежит 0.9.0, и набор проверок
+          # там отличается от того, на чём код писался. Пусть CI и рабочая
+          # машина ругаются одинаково.
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
+            | tar -xJ --strip-components=1 -C /usr/local/bin "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
+          shellcheck --version
       - name: Проверить все скрипты
         run: |
-          mapfile -t files < <(git ls-files '*.sh' install.sh)
-          printf 'Проверяю %d файлов\n' "${#files[@]}"
+          mapfile -t files < <(git ls-files '*.sh')
+          printf 'Проверяю %d файлов:\n' "${#files[@]}"
+          printf '  %s\n' "${files[@]}"
           shellcheck -x "${files[@]}"
 
   unit:
