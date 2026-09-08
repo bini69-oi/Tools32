@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Установить shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Проверить все скрипты
+        run: |
+          mapfile -t files < <(git ls-files '*.sh' install.sh)
+          printf 'Проверяю %d файлов\n' "${#files[@]}"
+          shellcheck -x "${files[@]}"
+
+  unit:
+    name: юнит-тесты (bash ${{ matrix.bash }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        bash: ['5']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Прогнать тесты
+        run: bash tests/run.sh
+
+  install-smoke:
+    name: установка на ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['debian:12', 'debian:13', 'ubuntu:22.04', 'ubuntu:24.04']
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Поставить зависимости проверок
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends ca-certificates curl iproute2 dnsutils git
+      - uses: actions/checkout@v4
+      - name: Скрипт запускается и видит систему
+        run: |
+          bash install.sh version
+          bash install.sh versions
+      - name: Предполётные проверки отрабатывают
+        env:
+          T32_STATE_DIR: /tmp/tools32-state
+          T32_LOG_FILE: /tmp/tools32.log
+        run: |
+          set +e
+          bash install.sh check panel
+          code=$?
+          set -e
+          echo "код возврата: $code"
+          # В контейнере :80/:443 свободны, места и памяти хватает — проверка
+          # должна пройти. Ненулевой код здесь означает регрессию в preflight.
+          test "$code" -eq 0
+      - name: Тесты проходят и на целевой ОС
+        run: bash tests/run.sh
+
+  images:
+    name: пины образов ещё существуют
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Проверить каждый тег на Docker Hub
+        run: bash tools/check-images.sh

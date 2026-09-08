@@ -1,0 +1,4 @@
+# Модули подключаются через source в рантайме — статически путь не виден.
+disable=SC1090,SC1091
+# Переменные из lang/*.sh и lib/versions.sh объявляются в другом файле.
+external-sources=true
