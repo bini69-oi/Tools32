@@ -19,6 +19,7 @@ declare -gA T32_IMAGE=(
     [db]="postgres:18.6"
     [redis]="valkey/valkey:9.1.2-alpine"
     [caddy]="caddy:2.11.4"
+    [nginx]="nginx:1.30"
 )
 
 # Панель 2.x отдаёт клиентам контракт 2.x, панель 3.x — 3.x, и страница
@@ -53,7 +54,7 @@ t32::versions::image() {
 # t32::versions::print — что именно будет установлено.
 t32::versions::print() {
     local key
-    for key in backend node subscription-page db redis caddy; do
+    for key in backend node subscription-page db redis nginx caddy; do
         printf '  %-18s %s\n' "$key" "${T32_IMAGE[$key]}"
     done
 }

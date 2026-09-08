@@ -83,3 +83,32 @@ jobs:
       - uses: actions/checkout@v4
       - name: Проверить каждый тег на Docker Hub
         run: bash tools/check-images.sh
+
+  compose:
+    name: compose валиден для всех сочетаний
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Отрендерить шесть сочетаний и скормить их docker compose
+        run: |
+          # Это и есть защита от того, из-за чего у апстрима разъехались теги:
+          # проверяются ВСЕ пути установки, а не тот, который правили последним.
+          work=$(mktemp -d)
+          cd "$work"
+          cat > .env <<'ENV'
+          APP_PORT=3000
+          METRICS_PORT=3001
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          POSTGRES_DB=postgres
+          REMNAWAVE_API_TOKEN=stub
+          NODE_PORT=2222
+          NODE_SECRET_KEY=stub
+          ENV
+          for role in panel node panel-node; do
+            for proxy in nginx caddy; do
+              bash "$GITHUB_WORKSPACE/install.sh" render "$role" "$proxy" > docker-compose.yml
+              docker compose config -q
+              echo "  ok  $role / $proxy"
+            done
+          done
