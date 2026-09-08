@@ -88,13 +88,21 @@ t32::journal::rollback() {
     printf '\n' >&2
     t32::warn "Откатываю «${T32_JOURNAL_OP:-установку}» — сервер вернётся в исходное состояние."
 
-    local kind arg
-    # tac читает журнал с конца: разбираем в порядке, обратном созданию.
-    while IFS=$'\t' read -r kind arg; do
-        [[ -z ${kind:-} || $kind == '#'* ]] && continue
+    # Журнал читаем целиком и идём по нему с конца — разбирать надо в порядке,
+    # обратном созданию. Без tac нарочно: он есть в GNU coreutils, но не везде,
+    # а откат, который молча ничего не сделал из-за отсутствующей утилиты, — это
+    # ровно тот отказ, ради которого журнал и заводился.
+    local -a lines=()
+    mapfile -t lines <"$f"
+
+    local i kind arg
+    for ((i = ${#lines[@]} - 1; i >= 0; i--)); do
+        [[ -z ${lines[i]} || ${lines[i]} == '#'* ]] && continue
+        IFS=$'\t' read -r kind arg <<<"${lines[i]}"
+        [[ -z ${kind:-} ]] && continue
         t32::info "откат: $kind $arg"
         t32::journal::__undo "$kind" "$arg" || true
-    done < <(tac "$f")
+    done
 
     mv -f "$f" "${f%.tsv}.rolled-back.tsv" 2>/dev/null || true
     t32::ok "Откат закончен. Лог: $T32_LOG_FILE"

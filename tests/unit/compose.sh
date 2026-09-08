@@ -68,7 +68,10 @@ for role in panel panel-node; do
     done
 done
 t32::versions::apply_major 3
-t32::t::eq "remnawave/backend:2|remnawave/subscription-page:7.2.6|" "$(sort -u <<<"$pairs" | head -1)"
+# grep . отсекает пустую строку от хвостового \n — иначе sort -u ставит её
+# первой, и head -1 возвращает пустоту вместо пары.
+uniq_pairs="$(sort -u <<<"$pairs" | grep . )"
+t32::t::eq "remnawave/backend:2|remnawave/subscription-page:7.2.6|" "$uniq_pairs"
 
 t32::t::case "неизвестная роль отвергается"
 t32::t::fails bash -c 'source "$T32_ROOT/lib/boot.sh"; t32::require log; t32::require versions; t32::require compose; t32::compose::render хрень nginx'

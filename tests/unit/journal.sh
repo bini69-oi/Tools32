@@ -44,4 +44,16 @@ t32::journal::mkdir "$SANDBOX/deep/pre-existing"
 t32::journal::rollback
 t32::t::dir_exists "$SANDBOX/deep/pre-existing"
 
+# Порядок важен: compose-стек надо погасить ДО того, как снесут его каталог,
+# иначе контейнеры останутся жить без docker-compose.yml.
+t32::t::case "откат идёт в порядке, обратном созданию"
+t32::journal::open "тест"
+t32::journal::record dir "/opt/t32-test/app"
+t32::journal::record compose "/opt/t32-test/app"
+t32::journal::record systemd "t32-test.service"
+T32_UNDO_ORDER=""
+t32::journal::__undo() { T32_UNDO_ORDER+="$1 "; }
+t32::journal::rollback
+t32::t::eq "systemd compose dir " "$T32_UNDO_ORDER"
+
 t32::t::summary
