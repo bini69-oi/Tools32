@@ -24,6 +24,7 @@ t32::compose::__subst() {
 }
 
 t32::compose::__header() {
+    local role="$1"
     cat <<'YAML'
 x-common: &common
   ulimits:
@@ -38,6 +39,11 @@ x-logging: &logging
     options:
       max-size: 100m
       max-file: 5
+YAML
+    # Якоря сети и env-файла нужны только сервисам панели. У одинокой ноды всё
+    # в network_mode: host, и объявлять их значит оставить мёртвый YAML.
+    if [[ $role != node ]]; then
+        cat <<'YAML'
 
 x-networks: &networks
   networks:
@@ -45,9 +51,9 @@ x-networks: &networks
 
 x-env: &env
   env_file: .env
-
-services:
 YAML
+    fi
+    printf '\nservices:\n'
 }
 
 t32::compose::__svc_db() {
@@ -206,44 +212,38 @@ YAML
 
 t32::compose::__footer() {
     local role="$1" proxy="$2"
-    cat <<'YAML'
+
+    # Сеть нужна только тем сервисам, что не сидят в network_mode: host.
+    # У одинокой ноды таких нет — объявлять сеть, которой никто не пользуется,
+    # значит оставить после себя мусор в docker network ls.
+    if [[ $role != node ]]; then
+        cat <<'YAML'
 networks:
   remnawave-network:
     name: remnawave-network
     driver: bridge
     external: false
 
-volumes:
 YAML
+    fi
+
+    # Собираем список томов заранее: пустой ключ volumes: — это либо ошибка
+    # compose, либо, что хуже, молча созданный том-пустышка.
+    local volumes=""
     if [[ $role != node ]]; then
-        cat <<'YAML'
-  remnawave-db-data:
-    name: remnawave-db-data
-    driver: local
-    external: false
-  valkey-socket:
-    name: valkey-socket
-    driver: local
-    external: false
-YAML
+        volumes+="  remnawave-db-data:"$'\n'"    name: remnawave-db-data"$'\n'
+        volumes+="    driver: local"$'\n'"    external: false"$'\n'
+        volumes+="  valkey-socket:"$'\n'"    name: valkey-socket"$'\n'
+        volumes+="    driver: local"$'\n'"    external: false"$'\n'
     fi
     if [[ $proxy == caddy ]]; then
-        cat <<'YAML'
-  caddy-data:
-    name: caddy-data
-    driver: local
-    external: false
-  caddy-config:
-    name: caddy-config
-    driver: local
-    external: false
-YAML
+        volumes+="  caddy-data:"$'\n'"    name: caddy-data"$'\n'
+        volumes+="    driver: local"$'\n'"    external: false"$'\n'
+        volumes+="  caddy-config:"$'\n'"    name: caddy-config"$'\n'
+        volumes+="    driver: local"$'\n'"    external: false"$'\n'
     fi
-    # У ноды без панели свои тома не нужны, но пустой ключ volumes: ломает
-    # compose — кладём заглушку.
-    if [[ $role == node && $proxy != caddy ]]; then
-        printf '  remnanode-placeholder:\n    name: remnanode-placeholder\n'
-    fi
+    [[ -n $volumes ]] && printf 'volumes:\n%s' "$volumes"
+    return 0
 }
 
 # t32::compose::render <panel|node|panel-node> <nginx|caddy> — печатает compose.
@@ -264,7 +264,7 @@ t32::compose::render() {
     )
 
     {
-        t32::compose::__header
+        t32::compose::__header "$role"
         if [[ $role != node ]]; then
             t32::compose::__svc_db
             t32::compose::__svc_redis

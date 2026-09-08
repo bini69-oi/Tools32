@@ -76,4 +76,31 @@ t32::t::fails bash -c 'source "$T32_ROOT/lib/boot.sh"; t32::require log; t32::re
 t32::t::case "неизвестный прокси отвергается"
 t32::t::fails bash -c 'source "$T32_ROOT/lib/boot.sh"; t32::require log; t32::require versions; t32::require compose; t32::compose::render panel хрень'
 
+# Ключи volumes: и networks: есть и внутри сервисов — проверять нужно только
+# верхний уровень, то есть начало строки.
+t32::t::case "одинокая нода не объявляет неиспользуемую сеть"
+out="$(t32::compose::render node nginx)"
+if grep -q '^networks:' <<<"$out"; then t32::t::__fail "сеть объявлена, хотя все сервисы в host"; else t32::t::__pass; fi
+
+t32::t::case "одинокая нода за nginx не объявляет пустой volumes:"
+out="$(t32::compose::render node nginx)"
+if grep -q '^volumes:' <<<"$out"; then t32::t::__fail "есть ключ volumes: без единого тома"; else t32::t::__pass; fi
+
+t32::t::case "панель объявляет сеть и тома на верхнем уровне"
+out="$(t32::compose::render panel nginx)"
+if grep -q '^networks:' <<<"$out" && grep -q '^volumes:' <<<"$out"; then t32::t::__pass
+else t32::t::__fail "не хватает networks: или volumes: на верхнем уровне"; fi
+
+t32::t::case "нода за caddy всё же объявляет тома caddy"
+out="$(t32::compose::render node caddy)"
+t32::t::contains "caddy-data:" "$out"
+
+t32::t::case "у одинокой ноды нет мёртвых якорей x-networks и x-env"
+out="$(t32::compose::render node nginx)"
+if [[ $out == *"x-networks:"* || $out == *"x-env:"* ]]; then
+    t32::t::__fail "остались якоря, которыми никто не пользуется"
+else
+    t32::t::__pass
+fi
+
 t32::t::summary
